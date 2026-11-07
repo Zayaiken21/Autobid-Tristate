@@ -52,6 +52,9 @@ th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);vertic
 .scroll{overflow-x:auto}
 .note{border-left:3px solid var(--warn);padding:8px 10px;background:#2a2312;border-radius:8px;font-size:13px}
 ul.flags{margin:6px 0 0;padding-left:18px}
+#scoutModal{display:none;position:fixed;inset:0;background:rgba(3,8,20,.72);z-index:2000;overflow-y:auto;padding:16px}
+#scoutModal .sheet{max-width:760px;margin:0 auto;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+details>summary{list-style:none}details>summary::-webkit-details-marker{display:none}
 footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 </style>
 </head>
@@ -62,6 +65,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 </header>
 <nav id="tabs">
   <button data-tab="auctions" class="active">Auctions</button>
+  <button data-tab="scout">⚡ Ultra Scout</button>
   <button data-tab="nyc">NYC Marshal Lots</button>
   <button data-tab="analyze">Analyze a Car</button>
   <button data-tab="watch">Watchlist</button>
@@ -93,6 +97,53 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
   <div id="map" class="card" style="padding:0"></div>
   <div id="yardList"></div>
   <p class="note">Yard details were gathered from public listings in Nov 2026. Sale days and fees change — always confirm on the auction's own page before you go.</p>
+</section>
+
+<!-- ULTRA SCOUT -->
+<section id="scout">
+  <div class="card">
+    <h2>⚡ Ultra Scout</h2>
+    <p class="muted">Scans every car you have loaded — NYC Marshal lists plus any Copart/IAA lots you add — values each one, prices your costs, grades the risk and ranks the best deals. Tap <b>Full analysis</b> on any car.</p>
+    <div class="kpi" id="scoutStats"></div>
+    <label style="margin-top:12px;display:flex;gap:8px;align-items:center;font-weight:700"><input type="checkbox" id="scRule" style="width:auto"> Only cars with keys that run &amp; drive</label>
+    <div class="grid" style="margin-top:10px">
+      <div><label>Source</label><select id="scSource"><option value="">All cars</option><option value="nyc">NYC Marshal</option><option value="mine">My added lots</option></select></div>
+      <div><label>Sort by</label><select id="scSort"><option value="score">Deal score</option><option value="profit">Est. profit</option><option value="roi">ROI %</option><option value="date">Sale date</option></select></div>
+      <div><label>Budget — max bid ($)</label><input id="scBudget" type="number" placeholder="any"></div>
+      <div><label>Min. profit ($)</label><input id="scMinProfit" type="number" placeholder="any"></div>
+    </div>
+    <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">⚙️ Cost assumptions</summary>
+      <div class="grid" style="margin-top:8px">
+        <div><label>Buyer fee (%)</label><input id="scFeePct" type="number" step="0.1"></div>
+        <div><label>Flat fees ($)</label><input id="scFeeFlat" type="number"></div>
+        <div><label>Tow / transport ($)</label><input id="scTow" type="number"></div>
+        <div><label>Title, DMV &amp; inspection ($)</label><input id="scDmv" type="number"></div>
+        <div><label>Sales tax (%)</label><input id="scTax" type="number" step="0.001"></div>
+        <div><label>Target profit ($)</label><input id="scProfit" type="number"></div>
+        <div><label>Default reconditioning ($)</label><input id="scRecon" type="number"></div>
+        <div><label>Expect to win at (% of wholesale)</label><input id="scWin" type="number"></div>
+      </div>
+      <button class="btn ghost" id="scReset" style="margin-top:8px">Reset to defaults</button>
+    </details>
+  </div>
+  <details class="card"><summary style="cursor:pointer;font-weight:700">➕ Add a lot (Copart, IAA or any auction)</summary>
+    <div class="grid" style="margin-top:10px">
+      <div><label>VIN</label><input id="mlVin" maxlength="17" style="text-transform:uppercase"></div>
+      <div><label>Auction</label><select id="mlSource"><option>Copart</option><option>IAA</option><option>Manheim</option><option>ACV</option><option>NYC Marshal</option><option>Other</option></select></div>
+      <div><label>Sale date</label><input id="mlDate" type="date"></div>
+      <div><label>Yard / location</label><input id="mlWhere" placeholder="IAA Staten Island"></div>
+      <div><label>Keys</label><select id="mlKeys"><option value="yes">Yes</option><option value="no">No</option><option value="unknown">Unknown</option></select></div>
+      <div><label>Run status</label><select id="mlRun"><option value="rd">Run &amp; drive</option><option value="start">Starts only</option><option value="no">Does not start</option><option value="unknown">Unknown</option></select></div>
+      <div><label>Title</label><select id="mlTitle"><option value="clean">Clean</option><option value="salvage">Salvage</option><option value="rebuilt">Rebuilt</option><option value="parts">Parts only</option><option value="unknown">Unknown</option></select></div>
+      <div><label>Damage</label><select id="mlDamage"><option value="none">None / minor</option><option value="front">Front</option><option value="rear">Rear</option><option value="side">Side</option><option value="mech">Mechanical</option><option value="flood">Flood</option><option value="fire">Fire</option><option value="vandal">Vandalism</option><option value="unknown">Unknown</option></select></div>
+      <div><label>Mileage</label><input id="mlMiles" type="number"></div>
+      <div><label>Current bid ($)</label><input id="mlBid" type="number"></div>
+    </div>
+    <button class="btn" id="mlAdd" style="margin-top:10px">Add &amp; analyze</button>
+    <div id="mlStatus" class="muted" style="margin-top:6px"></div>
+  </details>
+  <div id="scoutList"></div>
+  <p class="note">Sale prices are estimates from a depreciation model (typical new price, age, brand value retention, mileage, title). Tap the comp links in Full analysis and enter a real comp price for the most accurate numbers.</p>
 </section>
 
 <!-- NYC MARSHAL LOTS -->
@@ -153,6 +204,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 
   <div class="card">
     <h2>3 · Numbers → your max bid</h2>
+    <div id="valOut" class="muted" style="margin-bottom:10px">Decode a VIN above to see what the car could sell for.</div>
     <div class="grid">
       <div><label>Resale / retail value ($)</label><input id="nValue" type="number" placeholder="14000"></div>
       <div><label>Repair estimate ($)</label><input id="nRepair" type="number" value="0"></div>
@@ -413,15 +465,17 @@ document.getElementById('vinBtn').addEventListener('click',async()=>{
       <div class="kpi"><div>Model year<b style="font-size:14px">${off.year||'—'}</b></div><div>Maker<b style="font-size:14px">${esc(off.make||'—')}</b></div><div>Built in<b style="font-size:14px">${esc(off.country)}</b></div></div>
       ${chkNote}
       <p class="note">NHTSA couldn’t be reached (${esc(why||'unknown error')}), so this is a basic offline decode. ${preview?'You seem to be viewing the file in a preview or opened it from your device — open the live GitHub Pages link instead, since previews block outside data.':'NHTSA’s servers are sometimes slow — tap the button again in a minute.'}</p>`;
+    if(window.onVehicleDecoded) window.onVehicleDecoded(lastVehicle);
     return;
   }
-  lastVehicle={vin,year:v.ModelYear||off.year,make:v.Make||off.make,model:v.Model,trim:v.Trim};
+  lastVehicle={vin,year:v.ModelYear||off.year,make:v.Make||off.make,model:v.Model,trim:v.Trim,body:v.BodyClass};
   let html=`<b style="color:var(--text);font-size:16px">${esc(v.ModelYear||off.year||'')} ${esc(v.Make||off.make||'')} ${esc(v.Model||'')} ${esc(v.Trim||'')}</b>
     <div class="kpi"><div>Body<b style="font-size:14px">${esc(v.BodyClass||'—')}</b></div><div>Engine<b style="font-size:14px">${esc(v._engine||[(v.DisplacementL?(+v.DisplacementL).toFixed(1)+'L':''),(v.EngineCylinders?v.EngineCylinders+'-cyl':'')].filter(Boolean).join(' ')||'—')}</b></div>
     <div>Fuel<b style="font-size:14px">${esc(v.FuelTypePrimary||'—')}</b></div><div>Drive<b style="font-size:14px">${esc(v.DriveType||'—')}</b></div>
     <div>Built in<b style="font-size:14px">${esc(v.PlantCountry||off.country)}</b></div></div>${chkNote}`;
   if(v.ErrorCode&&v.ErrorCode!=='0') html+=`<p class="note">NHTSA note: ${esc(v.ErrorText)}</p>`;
   out.innerHTML=html;
+  if(window.onVehicleDecoded) window.onVehicleDecoded(lastVehicle);
   if(v.Make&&v.Model&&v.ModelYear){
     try{
       const rj=await getJSON(`https://api.nhtsa.gov/recalls/recallsByVehicle?make=${encodeURIComponent(v.Make)}&model=${encodeURIComponent(v.Model)}&modelYear=${v.ModelYear}`);
@@ -466,7 +520,8 @@ function money(n){return '$'+Math.round(n).toLocaleString();}
 document.getElementById('calcBtn').addEventListener('click',()=>{
   if(!num('nValue')){alert('Enter a resale/retail value first.');return;}
   const c=calc();
-  const verdict=c.grade==='F'?'Pass unless you are a parts buyer':c.maxBid<=0?'Numbers don\u2019t work at any price':c.grade==='D'?'Only at a deep discount':'Worth bidding up to your max';
+  const ruleFail=document.getElementById('cKeys').value!=='yes'||document.getElementById('cRun').value!=='rd';
+  const verdict=ruleFail?'✗ Fails your rule — only buy cars with keys that run & drive':c.grade==='F'?'Pass unless you are a parts buyer':c.maxBid<=0?'Numbers don\u2019t work at any price':c.grade==='D'?'Only at a deep discount':'Worth bidding up to your max';
   document.getElementById('result').innerHTML=`<div class="kpi" style="margin-top:14px">
     <div>Risk grade<span class="grade g${c.grade}">${c.grade}</span><span class="muted">${c.score}/100</span></div>
     <div>Max bid<b>${money(c.maxBid)}</b><span class="muted">stop here</span></div>
@@ -530,6 +585,7 @@ function buildNYC(){
   [...new Set(auctions.map(a=>a.borough).filter(Boolean))].sort().forEach(b=>{const o=document.createElement('option');o.textContent=b;nb.appendChild(o);});
   [...new Set(auctions.map(a=>a.date).filter(Boolean))].sort().forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=fmtDate(d);nd.appendChild(o);});
   renderNYC();
+  if(window.onNYCUpdate) window.onNYCUpdate();
 }
 
 /* ---- PDF import (runs in the browser) ---- */
@@ -646,6 +702,7 @@ function renderNYC(){
 function analyzeVin(vin){
   document.getElementById('vin').value=vin;
   document.getElementById('cTitle').value='marshal';
+  if(window.scoutApply) window.scoutApply(vin);
   document.querySelector('#tabs button[data-tab="analyze"]').click();
   window.scrollTo({top:0,behavior:'smooth'});
   document.getElementById('vinBtn').click();
@@ -654,5 +711,7 @@ function analyzeVin(vin){
 /* ---------------- INIT ---------------- */
 setHomeLabel();renderYards();loadNYC();
 </script>
+<div id="scoutModal"></div>
+<script src="scout.js"></script>
 </body>
 </html>

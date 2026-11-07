@@ -3,6 +3,8 @@
 Car auction decision tool for NYC (all 5 boroughs), Staten Island, Long Island, Yonkers/Westchester, the Hudson Valley and New Jersey.
 
 ## Features
+- **⚡ Ultra Scout** — scans every loaded car (NYC Marshal lists + Copart/IAA lots you add), estimates what each could sell for, prices your all-in cost, grades risk and ranks the best deals by a 0–100 deal score. Default rule: **only cars with keys that run & drive** (unverified cars are listed separately until you confirm them). Each car has a **Full analysis** with sale-price range, comp links (KBB, Edmunds, Facebook Marketplace, Craigslist), an inspection checklist, cost breakdowns at the likely and max bid, and risk factors.
+- **Sale-price estimates** — depreciation model (typical new price, age, brand value retention, mileage, title). Enter a real comp price to override it.
 - **Auction directory** — 22 IAA, Copart, Manheim, NYC Sheriff/Marshal and online auctions with map, distance from your ZIP, who can buy, next sale day, phone and directions.
 - **NYC Marshal Lots** — every NYC Sheriff/City Marshal vehicle sale list, with each car decoded (year, make, model, trim, engine). Add lists by importing the official PDF in the app (works on your phone), or publish them for everyone with `update_data.bat`. Filter by borough, date, year, make; tap **Analyze** to run the numbers.
 - **VIN lookup** — free decode + recalls from NHTSA, with an offline decoder and cached data as backups.
@@ -24,4 +26,5 @@ Settings → Pages → Deploy from branch `main` / root. Site: `https://zayaiken
 - Copart, IAA and Manheim don't offer public APIs for lot listings, so the directory links to each yard's live inventory.
 - NYC Marshal sales: in person, cash only, no warranty; remove the car by 5 PM on sale day.
 - Yard addresses and sale days were gathered Nov 2026 — confirm on the auction's site before going.
+- Resale estimates are a model, not market data — use the comp links before bidding. Model prices live in `MODEL_PRICES` in `scout.js`.
 - Edit the `YARDS` array in `index.html` to add or remove auctions.
