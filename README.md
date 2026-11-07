@@ -4,28 +4,21 @@ Car auction decision tool for NYC (all 5 boroughs), Staten Island, Long Island, 
 
 ## Features
 - **Auction directory** — 22 IAA, Copart, Manheim, NYC Sheriff/Marshal and online auctions with map, distance from your ZIP, who can buy, next sale day, phone and directions.
-- **NYC Marshal Lots (automatic)** — every upcoming NYC Sheriff/City Marshal vehicle sale, pulled each morning from NYC Dept. of Finance PDFs. Each car is pre-decoded (year, make, model, trim, engine) with a recall count. Filter by borough, date, year, make; tap **Analyze** to run the numbers.
+- **NYC Marshal Lots** — every NYC Sheriff/City Marshal vehicle sale list, with each car decoded (year, make, model, trim, engine). Add lists by importing the official PDF in the app (works on your phone), or publish them for everyone with `update_data.bat`. Filter by borough, date, year, make; tap **Analyze** to run the numbers.
 - **VIN lookup** — free decode + recalls from NHTSA, with an offline decoder and cached data as backups.
 - **Risk grade (A–F)** and **max-bid calculator** — buyer fees, sales tax (NYC / LI / Yonkers / Westchester / NJ), towing, DMV and a hidden-damage pad.
 - **Watchlist** — saved on your device, with JSON export/import.
 
-## How the automation works
-`.github/workflows/update-and-deploy.yml` runs every day (~6 AM New York time), on every push to `main`, and on demand:
-1. `scripts/fetch_nyc_auctions.py` reads the NYC DOF auctions page, downloads each upcoming auction PDF, extracts every lot, batch-decodes VINs and counts recalls with NHTSA.
-2. The result is committed to `data/nyc_marshal.json`.
-3. The site is deployed to GitHub Pages.
+## Getting NYC auction lists into the app
+nyc.gov blocks requests from GitHub's servers, so the lists can't be pulled by a scheduled cloud job. Two ways that work:
 
-Run it now: **Actions → Update auction data & deploy site → Run workflow**.
+1. **In the app (phone or PC):** NYC Marshal Lots → **Add PDF(s)**. Download any list from the [NYC auctions page](https://www.nyc.gov/site/finance/vehicles/auctions.page) and add it. The cars are read and decoded right in your browser and stay on that device.
+2. **Publish for everyone (Windows PC):** double-click `update_data.bat` in your local clone. It runs `scripts/fetch_nyc_auctions.py`, which reads every upcoming list, decodes VINs and counts recalls with NHTSA, writes `data/nyc_marshal.json`, then commits and pushes. The site picks it up in a minute or two.
 
-Run locally:
-```
-pip install requests pypdf
-python scripts/fetch_nyc_auctions.py
-```
+The workflow in `.github/workflows/` can also be started by hand from the Actions tab, but it will fail while nyc.gov blocks GitHub's servers.
 
-## GitHub Pages setup (one time)
-Repo → **Settings → Pages** → Source: **GitHub Actions**.
-Site: `https://zayaiken21.github.io/Autobid-Tristate/`
+## GitHub Pages
+Settings → Pages → Deploy from branch `main` / root. Site: `https://zayaiken21.github.io/Autobid-Tristate/`
 
 ## Data notes
 - Copart, IAA and Manheim don't offer public APIs for lot listings, so the directory links to each yard's live inventory.

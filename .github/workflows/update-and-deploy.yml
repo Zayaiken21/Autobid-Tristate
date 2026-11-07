@@ -1,20 +1,13 @@
-name: Update auction data & deploy site
+name: Update auction data
 
+# nyc.gov currently refuses requests from GitHub's servers (HTTP 403), so this only runs when
+# started by hand (Actions tab -> Run workflow). The reliable ways to update data are
+# update_data.bat on your PC, or "Import auction PDF" in the app.
 on:
-  schedule:
-    - cron: "17 10 * * *"   # every day ~6 AM New York time
-  push:
-    branches: [main]
-  workflow_dispatch:         # "Run workflow" button in the Actions tab
+  workflow_dispatch:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
   update:
@@ -31,31 +24,17 @@ jobs:
 
       - name: Fetch NYC Marshal / Sheriff auction lists
         run: python scripts/fetch_nyc_auctions.py
-        continue-on-error: true   # a nyc.gov outage shouldn't stop the site deploy
+        continue-on-error: true
 
       - name: Commit updated data
         run: |
           git config user.name "autobid-bot"
           git config user.email "autobid-bot@users.noreply.github.com"
-          git add data/
+          mkdir -p data
+          git add -A data/
           if git diff --cached --quiet; then
             echo "No data changes"
           else
             git commit -m "Update NYC auction data [skip ci]"
             git push
           fi
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-
-  deploy:
-    needs: update
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
