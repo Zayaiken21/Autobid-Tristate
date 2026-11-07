@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AutoBid Tri-State</title>
+<meta name="description" content="Car auction decision tool for NYC, Staten Island, Long Island, Yonkers/Westchester and New Jersey.">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --bg:#0b1220;--panel:#121b2e;--panel2:#18233b;--line:#25324f;--text:#e7ecf6;--muted:#93a1bd;
+  --accent:#3b82f6;--accent2:#22c55e;--warn:#f59e0b;--bad:#ef4444;--radius:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+a{color:#7fb0ff}
+header{padding:18px 16px 10px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0f1a31,#0b1220)}
+header h1{margin:0;font-size:22px;letter-spacing:.3px}
+header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+nav{display:flex;gap:6px;overflow-x:auto;padding:10px 16px;position:sticky;top:0;background:var(--bg);z-index:500;border-bottom:1px solid var(--line)}
+nav button{flex:0 0 auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-weight:600;cursor:pointer}
+nav button.active{background:var(--accent);border-color:var(--accent)}
+main{max-width:1100px;margin:0 auto;padding:16px}
+section{display:none}section.active{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:14px}
+.card h2{margin:0 0 10px;font-size:17px}
+.card h3{margin:0 0 6px;font-size:15px}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+input,select,textarea{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font:inherit}
+textarea{min-height:60px}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.btn.green{background:var(--accent2)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+#map{height:320px;border-radius:var(--radius);border:1px solid var(--line)}
+.yard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.yard .top{display:flex;justify-content:space-between;gap:8px;align-items:start}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin:2px 4px 2px 0;background:#22304f;color:#b9c7e6}
+.tag.public{background:#123b25;color:#7ee2a4}
+.tag.dealer{background:#3d2a0d;color:#fbbf6a}
+.tag.gov{background:#2e1940;color:#d8a6ff}
+.dist{font-weight:800;color:#7fb0ff;white-space:nowrap}
+.muted{color:var(--muted);font-size:13px}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:10px}
+.kpi div{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}
+.kpi b{display:block;font-size:20px}
+.grade{font-size:42px;font-weight:900;line-height:1}
+.gA{color:#22c55e}.gB{color:#84cc16}.gC{color:#f59e0b}.gD{color:#f97316}.gF{color:#ef4444}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.scroll{overflow-x:auto}
+.note{border-left:3px solid var(--warn);padding:8px 10px;background:#2a2312;border-radius:8px;font-size:13px}
+ul.flags{margin:6px 0 0;padding-left:18px}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
+</style>
+</head>
+<body>
+<header>
+  <h1>AutoBid Tri-State</h1>
+  <p>Auction finder + deal analyzer for NYC, Staten Island, Long Island, Yonkers/Westchester &amp; New Jersey</p>
+</header>
+<nav id="tabs">
+  <button data-tab="auctions" class="active">Auctions</button>
+  <button data-tab="nyc">NYC Marshal Lots</button>
+  <button data-tab="analyze">Analyze a Car</button>
+  <button data-tab="watch">Watchlist</button>
+  <button data-tab="guide">Buyer Guide</button>
+</nav>
+<main>
+
+<!-- AUCTIONS -->
+<section id="auctions" class="active">
+  <div class="card">
+    <h2>Where are you starting from?</h2>
+    <div class="row">
+      <div style="flex:1;min-width:140px"><label>Home ZIP</label><input id="zip" inputmode="numeric" maxlength="5" placeholder="e.g. 10701"></div>
+      <button class="btn" id="zipBtn">Set</button>
+      <div style="flex:1;min-width:140px"><label>Max distance (mi)</label><input id="maxDist" type="number" value="90"></div>
+    </div>
+    <p class="muted" id="homeLabel">Distances measured from Midtown Manhattan.</p>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <div><label>Region</label><select id="fRegion"><option value="">All regions</option></select></div>
+      <div><label>Who can buy</label><select id="fAccess"><option value="">Anyone / any</option><option value="public">Public can bid</option><option value="broker">Public via broker</option><option value="dealer">Dealer license only</option></select></div>
+      <div><label>Auction type</label><select id="fType"><option value="">All types</option><option>Insurance / Salvage</option><option>Dealer Wholesale</option><option>Government / Impound</option><option>Online Marketplace</option></select></div>
+      <div><label>Search</label><input id="fText" placeholder="name, town…"></div>
+    </div>
+  </div>
+
+  <div id="map" class="card" style="padding:0"></div>
+  <div id="yardList"></div>
+  <p class="note">Yard details were gathered from public listings in Nov 2026. Sale days and fees change — always confirm on the auction's own page before you go.</p>
+</section>
+
+<!-- NYC MARSHAL LOTS -->
+<section id="nyc">
+  <div class="card">
+    <h2>NYC Sheriff / Marshal auction lots</h2>
+    <p class="muted" id="nycStamp">Loading…</p>
+    <div class="grid">
+      <div><label>Borough</label><select id="nBoro"><option value="">All boroughs</option></select></div>
+      <div><label>Sale date</label><select id="nDate"><option value="">All upcoming</option></select></div>
+      <div><label>Min year</label><input id="nMinYear" type="number" placeholder="2015"></div>
+      <div><label>Search make / model / VIN</label><input id="nText" placeholder="Honda, Camry…"></div>
+    </div>
+    <label style="margin-top:8px;display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="nNoLien" style="width:auto"> Hide cars with a listed lienholder</label>
+  </div>
+  <div id="nycList"></div>
+  <p class="note">Public auction, in person, cash only. You buy the debtor's interest with no warranty — keys often missing; remove the car by 5 PM on sale day. Lists update automatically every morning from NYC Dept. of Finance.</p>
+</section>
+
+<!-- ANALYZE -->
+<section id="analyze">
+  <div class="card">
+    <h2>1 · VIN lookup</h2>
+    <div class="row">
+      <div style="flex:3;min-width:200px"><label>VIN (17 characters)</label><input id="vin" maxlength="17" placeholder="1HGCV1F4XKA021886" style="text-transform:uppercase"></div>
+      <button class="btn" id="vinBtn">Decode + Recalls</button>
+    </div>
+    <div id="vinOut" class="muted" style="margin-top:10px">Free data from NHTSA (U.S. DOT). Works on any VIN from a Copart, IAA, Manheim or NYC Marshal list.</div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Condition &amp; risk</h2>
+    <div class="grid">
+      <div><label>Title</label><select id="cTitle">
+        <option value="clean">Clean</option><option value="salvage">Salvage</option><option value="rebuilt">Rebuilt / Rebuildable</option>
+        <option value="parts">Parts only / Junk / Certificate of Destruction</option><option value="marshal">Marshal/Sheriff sale (title not guaranteed)</option><option value="unknown">Unknown</option></select></div>
+      <div><label>Primary damage</label><select id="cDamage">
+        <option value="none">None / Minor dents</option><option value="front">Front end</option><option value="rear">Rear end</option><option value="side">Side</option>
+        <option value="mech">Mechanical</option><option value="flood">Water / Flood</option><option value="fire">Burn / Fire</option><option value="roll">Rollover / Roof</option>
+        <option value="vandal">Vandalism / Theft recovery</option><option value="unknown">Unknown</option></select></div>
+      <div><label>Run status</label><select id="cRun"><option value="rd">Runs &amp; drives</option><option value="start">Starts only</option><option value="no">Does not start</option><option value="unknown">Unknown</option></select></div>
+      <div><label>Keys</label><select id="cKeys"><option value="yes">Yes</option><option value="no">No</option></select></div>
+      <div><label>Airbags deployed</label><select id="cBags"><option value="no">No</option><option value="yes">Yes</option></select></div>
+      <div><label>Odometer</label><select id="cOdo"><option value="actual">Actual</option><option value="exempt">Exempt</option><option value="notactual">Not actual / Broken</option></select></div>
+      <div><label>Mileage</label><input id="cMiles" type="number" placeholder="85000"></div>
+      <div><label>Open recalls</label><input id="cRecalls" type="number" value="0"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3 · Numbers → your max bid</h2>
+    <div class="grid">
+      <div><label>Resale / retail value ($)</label><input id="nValue" type="number" placeholder="14000"></div>
+      <div><label>Repair estimate ($)</label><input id="nRepair" type="number" value="0"></div>
+      <div><label>Profit / safety margin ($)</label><input id="nProfit" type="number" value="1500"></div>
+      <div><label>Buyer fee (% of bid)</label><input id="nFeePct" type="number" step="0.1" value="10"></div>
+      <div><label>Flat auction fees ($)</label><input id="nFeeFlat" type="number" value="150"></div>
+      <div><label>Towing / transport ($)</label><input id="nTow" type="number" value="250"></div>
+      <div><label>Title, DMV &amp; inspection ($)</label><input id="nDmv" type="number" value="200"></div>
+      <div><label>Sales tax (%)</label><select id="nTax"><option value="8.875">NYC 8.875%</option><option value="8.625">Long Island ~8.625%</option><option value="8.875">Yonkers 8.875%</option><option value="8.375">Westchester (other) 8.375%</option><option value="6.625">New Jersey 6.625%</option><option value="0">None / reseller exempt</option></select></div>
+    </div>
+    <p class="muted">Buyer fees vary a lot by auction and price tier — look up the yard's current fee chart and adjust the % and flat fee to match.</p>
+    <div class="row"><button class="btn green" id="calcBtn">Calculate</button><button class="btn ghost" id="saveBtn">Save to watchlist</button></div>
+    <div id="result"></div>
+  </div>
+</section>
+
+<!-- WATCHLIST -->
+<section id="watch">
+  <div class="card">
+    <h2>Watchlist</h2>
+    <p class="muted">Saved on this device only. Export to back it up or move it to another phone/computer.</p>
+    <div class="row" style="margin-bottom:10px">
+      <button class="btn ghost" id="expBtn">Export JSON</button>
+      <label class="btn ghost" style="margin:0;color:var(--text);font-size:15px">Import JSON<input type="file" id="impFile" accept="application/json" hidden></label>
+      <button class="btn ghost" id="clrBtn">Clear all</button>
+    </div>
+    <div class="scroll"><table id="watchTable"></table></div>
+  </div>
+</section>
+
+<!-- GUIDE -->
+<section id="guide">
+  <div class="card">
+    <h2>Making a smart call</h2>
+    <h3>Know which auctions you can actually use</h3>
+    <p class="muted">Copart and IAA sell many lots to the public, but some salvage/parts-only lots in NY and NJ require a dealer or dismantler license — use a licensed broker for those. Manheim and ACV are dealer-only. NYC Sheriff/City Marshal sales are open to the public, in person, cash only.</p>
+    <h3>NYC Marshal/Sheriff sales</h3>
+    <p class="muted">You buy the debtor's "right, title and interest" with no warranty. Keys are often missing, the car may need a tow, and it must be removed by 5 PM on sale day or storage charges start. Run every VIN in the Analyze tab before you go.</p>
+    <h3>Red flags that should lower your bid</h3>
+    <ul class="flags muted">
+      <li>Flood/water damage — especially common in the NY/NJ coastal area after storms</li>
+      <li>Fire, rollover, or deployed airbags (airbag kits are expensive)</li>
+      <li>"Not actual" odometer, no keys, does not start</li>
+      <li>Open safety recalls (free to fix at a dealer, but confirm parts availability)</li>
+    </ul>
+    <h3>Rules of thumb</h3>
+    <ul class="flags muted">
+      <li>Set your max bid before the sale and don't chase it</li>
+      <li>Pad repair estimates 20–30% for hidden damage</li>
+      <li>Get a full history report (Carfax/AutoCheck) on anything you're serious about</li>
+      <li>Salvage cars in NY need a salvage examination; NJ needs an MVC salvage inspection before re-titling</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>Useful links</h2>
+    <ul class="flags">
+      <li><a href="https://www.nyc.gov/site/finance/vehicles/auctions.page" target="_blank" rel="noopener">NYC Dept. of Finance — Sheriff/Marshal vehicle auctions</a></li>
+      <li><a href="https://www.propertyroom.com/" target="_blank" rel="noopener">PropertyRoom — NYPD online police auctions</a></li>
+      <li><a href="https://www.iaai.com/us/locations" target="_blank" rel="noopener">IAA — all branches &amp; next sale</a></li>
+      <li><a href="https://www.copart.com/locations" target="_blank" rel="noopener">Copart — yard finder</a></li>
+      <li><a href="https://www.nhtsa.gov/recalls" target="_blank" rel="noopener">NHTSA recall lookup</a></li>
+      <li><a href="https://vehiclehistory.bja.ojp.gov/" target="_blank" rel="noopener">NMVTIS — federal title history</a></li>
+    </ul>
+  </div>
+</section>
+</main>
+<footer>AutoBid Tri-State · Not affiliated with any auction company · Estimates only, not financial advice</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ---------------- DATA ---------------- */
+// Coordinates are approximate (for distance + map only). saleDay: 0=Sun..6=Sat, null = varies.
+const YARDS = [
+  // IAA
+  {name:"IAA Staten Island",brand:"IAA",type:"Insurance / Salvage",access:"public",region:"Staten Island",addr:"1900 South Ave, Staten Island, NY 10314",phone:"718-304-7671",lat:40.598,lng:-74.188,saleDay:null,url:"https://www.iaai.com/us/Locations/673"},
+  {name:"IAA Avenel",brand:"IAA",type:"Insurance / Salvage",access:"public",region:"North / Central NJ",addr:"87 Randolph Ave, Avenel, NJ 07001",phone:"732-499-6802",lat:40.583,lng:-74.270,saleDay:1,saleNote:"Mondays 9:30 AM ET",url:"https://www.iaai.com/us/Locations/607"},
+  {name:"IAA Sayreville",brand:"IAA",type:"Insurance / Salvage",access:"public",region:"North / Central NJ",addr:"Sayreville, NJ (NJ Turnpike Exit 11 area)",phone:"732-238-4006",lat:40.459,lng:-74.331,saleDay:null,url:"https://www.iaai.com/US/Locations/606"},
+  {name:"IAA Central New Jersey",brand:"IAA",type:"Insurance / Salvage",access:"public",region:"North / Central NJ",addr:"426 Texas Rd, Morganville, NJ 07751",phone:"732-591-8173",lat:40.372,lng:-74.268,saleDay:3,saleNote:"Wednesdays 9:30 AM ET",url:"https://www.iaai.com/us/Locations/614"},
+  {name:"IAA Englishtown",brand:"IAA",type:"Insurance / Salvage",access:"public",region:"North / Central NJ",addr:"Pension Rd, Englishtown, NJ (pay at Central NJ branch)",phone:"",lat:40.317,lng:-74.330,saleDay:1,saleNote:"Mondays 9:30 AM ET",url:"https://www.iaai.com/us/Locations/611"},
+  {name:"IAA Port Murray",brand:"IAA",type:"Insurance / Salvage",access:"public",region:"Northwest NJ",addr:"Port Murray, NJ",phone:"908-857-4720",lat:40.790,lng:-74.915,saleDay:null,url:"https://www.iaai.com/us/Locations/621"},
+  {name:"IAA Long Island",brand:"IAA",type:"Insurance / Salvage",access:"public",region:"Long Island",addr:"66 Peconic Ave, Medford, NY 11763",phone:"631-207-3477",lat:40.818,lng:-72.999,saleDay:null,url:"https://www.iaai.com/us/Locations/613"},
+  {name:"IAA Newburgh",brand:"IAA",type:"Insurance / Salvage",access:"public",region:"Hudson Valley",addr:"Stone Castle Rd area, Newburgh, NY (I-84 Exit 34)",phone:"845-567-6360",lat:41.525,lng:-74.065,saleDay:3,saleNote:"Wednesdays 9:30 AM ET",url:"https://www.iaai.com/us/Locations/635"},
+  // Copart
+  {name:"Copart Long Island",brand:"Copart",type:"Insurance / Salvage",access:"public",region:"Long Island",addr:"1983 Montauk Hwy, Brookhaven, NY 11719",phone:"631-776-0994",lat:40.776,lng:-72.928,saleDay:3,saleNote:"Wednesdays (verify on Copart)",url:"https://www.copart.com/locations"},
+  {name:"Copart Somerville",brand:"Copart",type:"Insurance / Salvage",access:"public",region:"North / Central NJ",addr:"2124 West Camplain Rd, Somerville, NJ 08844",phone:"908-541-2200",lat:40.548,lng:-74.640,saleDay:null,url:"https://www.copart.com/locations"},
+  {name:"Copart Trenton",brand:"Copart",type:"Insurance / Salvage",access:"public",region:"South / Central NJ",addr:"108 North Main St, Windsor (Trenton), NJ 08561",phone:"609-918-1720",lat:40.243,lng:-74.583,saleDay:null,url:"https://www.copart.com/locations"},
+  {name:"Copart Newburgh",brand:"Copart",type:"Insurance / Salvage",access:"public",region:"Hudson Valley",addr:"91 Riverview Dr, Marlboro (Newburgh), NY 12542",phone:"845-236-3371",lat:41.600,lng:-73.975,saleDay:null,url:"https://www.copart.com/locations"},
+  // Manheim (dealer)
+  {name:"Manheim NY Metro Skyline",brand:"Manheim",type:"Dealer Wholesale",access:"dealer",region:"North / Central NJ",addr:"100 US Hwy 46, Fairfield, NJ 07004",phone:"973-227-0100",lat:40.884,lng:-74.293,saleDay:null,url:"https://site.manheim.com/en/states/newjersey"},
+  {name:"Manheim New Jersey",brand:"Manheim",type:"Dealer Wholesale",access:"dealer",region:"South / Central NJ",addr:"730 Route 68, Bordentown, NJ 08505",phone:"609-298-3400",lat:40.103,lng:-74.660,saleDay:3,saleNote:"Wednesdays (verify schedule)",url:"https://site.manheim.com/en/states/newjersey"},
+  {name:"Manheim New York",brand:"Manheim",type:"Dealer Wholesale",access:"dealer",region:"Hudson Valley",addr:"2000 Dealer Dr, Newburgh, NY 12550",phone:"845-567-8400",lat:41.511,lng:-74.072,saleDay:4,saleNote:"Thursdays (verify schedule)",url:"https://site.manheim.com/en/states/newyork"},
+  // NYC Sheriff / Marshal — rotating impound yards
+  {name:"NYC Marshal Sale — Brooklyn",brand:"NYC Sheriff",type:"Government / Impound",access:"public",region:"NYC (Brooklyn)",addr:"Kenben Industries, 1908 Shore Pkwy, Brooklyn, NY 11214",phone:"",lat:40.594,lng:-74.000,saleDay:null,saleNote:"Dates posted by NYC DOF · cash only · in person",url:"https://www.nyc.gov/site/finance/vehicles/auctions.page"},
+  {name:"NYC Marshal Sale — Bronx",brand:"NYC Sheriff",type:"Government / Impound",access:"public",region:"NYC (Bronx) / near Yonkers",addr:"Five J's Automotive, 4825 Baldwin St, Bronx, NY",phone:"",lat:40.903,lng:-73.844,saleDay:null,saleNote:"Dates posted by NYC DOF · cash only · in person",url:"https://www.nyc.gov/site/finance/vehicles/auctions.page"},
+  {name:"NYC Marshal Sale — Queens (Flushing)",brand:"NYC Sheriff",type:"Government / Impound",access:"public",region:"NYC (Queens)",addr:"Legacy Towing, 131-01 39th Ave, Flushing, NY 11354",phone:"",lat:40.757,lng:-73.843,saleDay:null,saleNote:"Dates posted by NYC DOF · cash only · in person",url:"https://www.nyc.gov/site/finance/vehicles/auctions.page"},
+  {name:"NYC Marshal Sale — Queens (Rockaway)",brand:"NYC Sheriff",type:"Government / Impound",access:"public",region:"NYC (Queens)",addr:"Five J's Automotive, 62-02 Beach Channel Dr, Arverne, NY 11692",phone:"",lat:40.592,lng:-73.792,saleDay:null,saleNote:"Dates posted by NYC DOF · cash only · in person",url:"https://www.nyc.gov/site/finance/vehicles/auctions.page"},
+  {name:"NYC Marshal Sale — Staten Island",brand:"NYC Sheriff",type:"Government / Impound",access:"public",region:"Staten Island",addr:"Breen Brothers, 566 Industrial Loop, Staten Island, NY 10309",phone:"",lat:40.537,lng:-74.224,saleDay:null,saleNote:"Dates posted by NYC DOF · cash only · in person",url:"https://www.nyc.gov/site/finance/vehicles/auctions.page"},
+  // Online
+  {name:"NYPD Police Auctions (PropertyRoom)",brand:"PropertyRoom",type:"Online Marketplace",access:"public",region:"Online",addr:"Online — seized/unclaimed property incl. some vehicles",phone:"",lat:null,lng:null,saleDay:null,url:"https://www.propertyroom.com/"},
+  {name:"ACV Auctions (Yonkers & Westchester inventory)",brand:"ACV",type:"Online Marketplace",access:"dealer",region:"Online",addr:"Online — dealer license required, inspected cars",phone:"",lat:null,lng:null,saleDay:null,url:"https://acvauctions.com/online-auctions/yonkers-ny"}
+];
+// IAA & Copart: some lots are public, others need a license/broker.
+YARDS.forEach(y=>{ if(y.brand==="IAA"||y.brand==="Copart") y.accessNote="Many lots public; some salvage lots need a license or broker"; });
+
+/* ---------------- STORAGE (safe) ---------------- */
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+/* ---------------- TABS ---------------- */
+document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x===b));
+  document.querySelectorAll('main section').forEach(s=>s.classList.toggle('active',s.id===b.dataset.tab));
+  if(b.dataset.tab==='auctions'&&map) setTimeout(()=>map.invalidateSize(),50);
+  if(b.dataset.tab==='watch') renderWatch();
+}));
+
+/* ---------------- HOME + DISTANCE ---------------- */
+let home=store.get('ab_home',{lat:40.758,lng:-73.9855,label:'Midtown Manhattan'});
+function miles(a,b,c,d){const R=3958.8,t=x=>x*Math.PI/180;const dl=t(c-a),dg=t(d-b);
+  const h=Math.sin(dl/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dg/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+function setHomeLabel(){document.getElementById('homeLabel').textContent='Straight-line distances from '+home.label+'.';}
+document.getElementById('zipBtn').addEventListener('click',async()=>{
+  const z=document.getElementById('zip').value.trim();
+  if(!/^\d{5}$/.test(z)){alert('Enter a 5-digit ZIP');return;}
+  try{
+    const r=await fetch('https://api.zippopotam.us/us/'+z);
+    if(!r.ok) throw 0;
+    const j=await r.json();const p=j.places[0];
+    home={lat:+p.latitude,lng:+p.longitude,label:p['place name']+', '+p['state abbreviation']+' '+z};
+    store.set('ab_home',home);setHomeLabel();renderYards();
+  }catch(e){alert('Could not look up that ZIP. Try another.');}
+});
+
+/* ---------------- NEXT SALE ---------------- */
+function nextSale(day){ if(day==null) return null; const d=new Date(); const diff=(day-d.getDay()+7)%7; d.setDate(d.getDate()+diff);
+  return diff===0?'Today':diff===1?'Tomorrow':d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); }
+
+/* ---------------- MAP ---------------- */
+let map=null,markers=null;
+try{
+  map=L.map('map',{scrollWheelZoom:false}).setView([40.75,-74.05],8);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap'}).addTo(map);
+  markers=L.layerGroup().addTo(map);
+}catch(e){document.getElementById('map').style.display='none';}
+
+/* ---------------- FILTERS ---------------- */
+const regions=[...new Set(YARDS.map(y=>y.region))].sort();
+const fRegion=document.getElementById('fRegion');
+regions.forEach(r=>{const o=document.createElement('option');o.textContent=r;fRegion.appendChild(o);});
+['fRegion','fAccess','fType','fText','maxDist'].forEach(id=>document.getElementById(id).addEventListener('input',renderYards));
+
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+function renderYards(){
+  const reg=fRegion.value,acc=document.getElementById('fAccess').value,typ=document.getElementById('fType').value;
+  const q=document.getElementById('fText').value.toLowerCase(),max=+document.getElementById('maxDist').value||9999;
+  let list=YARDS.map(y=>({...y,dist:y.lat==null?null:miles(home.lat,home.lng,y.lat,y.lng)}))
+    .filter(y=>(!reg||y.region===reg)&&(!typ||y.type===typ)
+      &&(!acc||(acc==='public'&&y.access==='public')||(acc==='dealer'&&y.access==='dealer')||(acc==='broker'&&(y.brand==='IAA'||y.brand==='Copart')))
+      &&(!q||(y.name+' '+y.addr+' '+y.region).toLowerCase().includes(q))
+      &&(y.dist==null||y.dist<=max))
+    .sort((a,b)=>(a.dist??1e9)-(b.dist??1e9));
+  const out=document.getElementById('yardList');
+  out.innerHTML=list.length?'':'<div class="card muted">No auctions match. Try a larger distance.</div>';
+  if(markers) markers.clearLayers();
+  const pts=[];
+  list.forEach(y=>{
+    const ns=nextSale(y.saleDay);
+    const accTag=y.access==='dealer'?'<span class="tag dealer">Dealer only</span>':y.type.startsWith('Gov')?'<span class="tag gov">Public · cash</span>':'<span class="tag public">Public</span>';
+    const div=document.createElement('div');div.className='yard';
+    div.innerHTML=`<div class="top"><div><b>${esc(y.name)}</b><br>${accTag}<span class="tag">${esc(y.type)}</span><span class="tag">${esc(y.region)}</span></div>
+      <div class="dist">${y.dist==null?'Online':Math.round(y.dist)+' mi'}</div></div>
+      <div class="muted" style="margin-top:6px">${esc(y.addr)}${y.phone?' · <a href="tel:'+esc(y.phone)+'">'+esc(y.phone)+'</a>':''}</div>
+      ${y.saleNote?`<div class="muted">🗓 ${esc(y.saleNote)}${ns?' — next: <b>'+ns+'</b>':''}</div>`:''}
+      ${y.accessNote?`<div class="muted">ℹ️ ${esc(y.accessNote)}</div>`:''}
+      <div class="row" style="margin-top:8px"><a class="btn ghost" href="${esc(y.url)}" target="_blank" rel="noopener" style="text-decoration:none">Inventory / details</a>
+      ${y.lat!=null?`<a class="btn ghost" style="text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(y.addr)}">Directions</a>`:''}</div>`;
+    out.appendChild(div);
+    if(markers&&y.lat!=null){L.marker([y.lat,y.lng]).bindPopup('<b>'+esc(y.name)+'</b><br>'+esc(y.addr)).addTo(markers);pts.push([y.lat,y.lng]);}
+  });
+  if(map&&pts.length){pts.push([home.lat,home.lng]);map.fitBounds(pts,{padding:[30,30],maxZoom:11});}
+  if(markers) L.circleMarker([home.lat,home.lng],{radius:7,color:'#22c55e'}).bindPopup('Home: '+esc(home.label)).addTo(markers);
+}
+
+/* ---------------- VIN + RECALLS ---------------- */
+let lastVehicle=null;
+
+// fetch JSON with a timeout + retries, and a readable reason when it fails
+async function getJSON(url,{tries=2,timeout=12000}={}){
+  // No AbortController: some previews/webviews can't pass an abort signal to fetch ("object can not be cloned")
+  let last;
+  for(let i=0;i<tries;i++){
+    try{
+      const r=await Promise.race([
+        fetch(url),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('request timed out')),timeout))
+      ]);
+      if(!r.ok) throw new Error('server returned '+r.status);
+      return await r.json();
+    }catch(e){
+      last=e instanceof TypeError?new Error('blocked or offline'):e;
+      if(i<tries-1) await new Promise(res=>setTimeout(res,800));
+    }
+  }
+  throw last;
+}
+
+// Offline VIN decode — works with no internet: year, maker, check digit
+const WMI={'1HG':'Honda','2HG':'Honda','5FN':'Honda','5J6':'Honda','19X':'Honda','JHM':'Honda','19U':'Acura','JH4':'Acura',
+ '1N4':'Nissan','1N6':'Nissan','3N1':'Nissan','5N1':'Nissan','JN1':'Nissan','JN8':'Nissan','JNK':'Infiniti',
+ '4T1':'Toyota','4T3':'Toyota','2T1':'Toyota','5TD':'Toyota','5TF':'Toyota','5YF':'Toyota','JTD':'Toyota','JTE':'Toyota','JTM':'Toyota','JTN':'Toyota','JTH':'Lexus','2T2':'Lexus','JTJ':'Lexus',
+ '1G1':'Chevrolet','2G1':'Chevrolet','1GC':'Chevrolet','1GN':'Chevrolet','3GN':'Chevrolet','3GC':'Chevrolet','1GT':'GMC','1GK':'GMC','1G4':'Buick','1G6':'Cadillac',
+ '1FA':'Ford','1FT':'Ford','1FM':'Ford','3FA':'Ford','1FD':'Ford','2FM':'Ford','1LN':'Lincoln','5LM':'Lincoln',
+ '1C4':'Jeep/Chrysler','1C3':'Chrysler','2C3':'Chrysler/Dodge','1C6':'Ram','3C6':'Ram','2C4':'Chrysler/Dodge','1J4':'Jeep','1D7':'Dodge','2D4':'Dodge',
+ 'KMH':'Hyundai','5NP':'Hyundai','5NM':'Hyundai','5XY':'Kia','KM8':'Hyundai','KNA':'Kia','KND':'Kia','5XX':'Kia','KNM':'Nissan (Rogue)',
+ 'WBA':'BMW','WBS':'BMW M','5UX':'BMW','5YM':'BMW','WMW':'MINI','WDD':'Mercedes-Benz','W1K':'Mercedes-Benz','W1N':'Mercedes-Benz','4JG':'Mercedes-Benz','WD3':'Mercedes-Benz',
+ 'WAU':'Audi','WA1':'Audi','WVW':'Volkswagen','3VW':'Volkswagen','1VW':'Volkswagen','WVG':'Volkswagen','WP0':'Porsche','WP1':'Porsche',
+ 'JF1':'Subaru','JF2':'Subaru','4S3':'Subaru','4S4':'Subaru','JM1':'Mazda','JM3':'Mazda','3MZ':'Mazda','JA4':'Mitsubishi','JA3':'Mitsubishi',
+ '5YJ':'Tesla','7SA':'Tesla','SAJ':'Jaguar','SAL':'Land Rover','YV1':'Volvo','YV4':'Volvo','ZAM':'Maserati','ZFF':'Ferrari','ZAR':'Alfa Romeo'};
+const REGION={'1':'USA','4':'USA','5':'USA','2':'Canada','3':'Mexico','J':'Japan','K':'South Korea','W':'Germany','S':'United Kingdom','Y':'Sweden/Finland','Z':'Italy','V':'France/Spain','L':'China'};
+function offlineDecode(vin){
+  const codes='ABCDEFGHJKLMNPRSTVWXY123456789';const i=codes.indexOf(vin[9]);
+  let year=null;if(i>=0) year=(/[A-Z]/.test(vin[6])?2010:1980)+i;
+  if(year&&year>new Date().getFullYear()+1) year-=30;
+  const tr={A:1,B:2,C:3,D:4,E:5,F:6,G:7,H:8,J:1,K:2,L:3,M:4,N:5,P:7,R:9,S:2,T:3,U:4,V:5,W:6,X:7,Y:8,Z:9};
+  const wt=[8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2];
+  let sum=0;for(let k=0;k<17;k++){const c=vin[k];sum+=(/\d/.test(c)?+c:tr[c])*wt[k];}
+  const chk=sum%11===10?'X':String(sum%11);
+  return {year,make:WMI[vin.slice(0,3)]||null,country:REGION[vin[0]]||'Unknown',checkOk:chk===vin[8]};
+}
+
+function recallHTML(list){
+  return `<h3 style="margin-top:12px">Recalls for this model/year: ${list.length}</h3>`+
+    (list.length?'<ul class="flags">'+list.slice(0,8).map(x=>`<li><b>${esc(x.Component)}</b> — ${esc((x.Summary||'').slice(0,180))}…</li>`).join('')+'</ul>'+
+    `<p class="muted">These apply to the model. Check whether <i>this</i> VIN still has them open at <a href="https://www.nhtsa.gov/recalls" target="_blank" rel="noopener">nhtsa.gov/recalls</a>.</p>`:'');
+}
+
+document.getElementById('vinBtn').addEventListener('click',async()=>{
+  const vin=document.getElementById('vin').value.trim().toUpperCase();
+  const out=document.getElementById('vinOut');
+  if(!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)){out.innerHTML='<span style="color:var(--bad)">VIN must be 17 characters (no I, O or Q).</span>';return;}
+  const off=offlineDecode(vin);
+  const chkNote=off.checkOk?'':'<p class="note">Check digit (9th character) doesn’t match — double-check the VIN for a typo. (Some non-U.S. cars don’t use it.)</p>';
+  out.innerHTML='Looking up at NHTSA…';
+  let v=null,why='';
+  for(const ep of ['DecodeVinValues','DecodeVinValuesExtended']){
+    try{const j=await getJSON(`https://vpic.nhtsa.dot.gov/api/vehicles/${ep}/${vin}?format=json`);v=j&&j.Results&&j.Results[0];if(v)break;}
+    catch(e){why=e.message;}
+  }
+  if(!v&&nycByVin[vin]&&nycByVin[vin].decoded){
+    const c=nycByVin[vin].decoded;
+    v={ModelYear:c.modelYear,Make:c.make,Model:c.model,Trim:c.trim,BodyClass:c.body,FuelTypePrimary:c.fuel,DriveType:c.drive,ErrorCode:'0',_engine:c.engine,_recalls:nycByVin[vin].recalls};
+  }
+  if(!v){
+    lastVehicle={vin,year:off.year,make:off.make||'',model:'',trim:''};
+    const preview=location.protocol==='file:'||window.self!==window.top;
+    out.innerHTML=`<b style="color:var(--text);font-size:16px">${off.year||'?'} ${esc(off.make||'Unknown make')}</b>
+      <div class="kpi"><div>Model year<b style="font-size:14px">${off.year||'—'}</b></div><div>Maker<b style="font-size:14px">${esc(off.make||'—')}</b></div><div>Built in<b style="font-size:14px">${esc(off.country)}</b></div></div>
+      ${chkNote}
+      <p class="note">NHTSA couldn’t be reached (${esc(why||'unknown error')}), so this is a basic offline decode. ${preview?'You seem to be viewing the file in a preview or opened it from your device — open the live GitHub Pages link instead, since previews block outside data.':'NHTSA’s servers are sometimes slow — tap the button again in a minute.'}</p>`;
+    return;
+  }
+  lastVehicle={vin,year:v.ModelYear||off.year,make:v.Make||off.make,model:v.Model,trim:v.Trim};
+  let html=`<b style="color:var(--text);font-size:16px">${esc(v.ModelYear||off.year||'')} ${esc(v.Make||off.make||'')} ${esc(v.Model||'')} ${esc(v.Trim||'')}</b>
+    <div class="kpi"><div>Body<b style="font-size:14px">${esc(v.BodyClass||'—')}</b></div><div>Engine<b style="font-size:14px">${esc(v._engine||[(v.DisplacementL?(+v.DisplacementL).toFixed(1)+'L':''),(v.EngineCylinders?v.EngineCylinders+'-cyl':'')].filter(Boolean).join(' ')||'—')}</b></div>
+    <div>Fuel<b style="font-size:14px">${esc(v.FuelTypePrimary||'—')}</b></div><div>Drive<b style="font-size:14px">${esc(v.DriveType||'—')}</b></div>
+    <div>Built in<b style="font-size:14px">${esc(v.PlantCountry||off.country)}</b></div></div>${chkNote}`;
+  if(v.ErrorCode&&v.ErrorCode!=='0') html+=`<p class="note">NHTSA note: ${esc(v.ErrorText)}</p>`;
+  out.innerHTML=html;
+  if(v.Make&&v.Model&&v.ModelYear){
+    try{
+      const rj=await getJSON(`https://api.nhtsa.gov/recalls/recallsByVehicle?make=${encodeURIComponent(v.Make)}&model=${encodeURIComponent(v.Model)}&modelYear=${v.ModelYear}`);
+      const list=rj.results||[];document.getElementById('cRecalls').value=list.length;out.innerHTML+=recallHTML(list);
+    }catch(e){
+      if(v._recalls!=null){document.getElementById('cRecalls').value=v._recalls;out.innerHTML+=`<h3 style="margin-top:12px">Recalls for this model/year: ${v._recalls}</h3><p class="muted">From this morning’s data. Details at <a href="https://www.nhtsa.gov/recalls" target="_blank" rel="noopener">nhtsa.gov/recalls</a>.</p>`;return;}out.innerHTML+=`<p class="muted">Recall lookup unavailable (${esc(e.message)}). Check manually at <a href="https://www.nhtsa.gov/recalls" target="_blank" rel="noopener">nhtsa.gov/recalls</a>.</p>`;}
+  }
+});
+
+/* ---------------- RISK + MAX BID ---------------- */
+const num=id=>+document.getElementById(id).value||0;
+function risk(){
+  let s=100;const f=[];
+  const t=document.getElementById('cTitle').value,d=document.getElementById('cDamage').value,r=document.getElementById('cRun').value;
+  const T={clean:0,salvage:15,rebuilt:10,parts:45,marshal:12,unknown:20};s-=T[t];
+  if(t==='parts')f.push('Parts-only/junk title — usually cannot be registered again');
+  if(t==='marshal')f.push('Marshal sale: no warranty, title transfer not guaranteed');
+  if(t==='salvage')f.push('Salvage title — needs repair + state salvage inspection');
+  const D={none:0,front:10,rear:7,side:9,mech:12,flood:35,fire:35,roll:30,vandal:10,unknown:15};s-=D[d];
+  if(d==='flood')f.push('Flood damage — electrical problems often show up months later');
+  if(d==='fire')f.push('Fire damage — wiring and structure often compromised');
+  if(d==='roll')f.push('Rollover — roof/frame damage likely');
+  s-={rd:0,start:8,no:18,unknown:12}[r];if(r==='no')f.push('Does not start — budget for engine/electrical diagnosis');
+  if(document.getElementById('cKeys').value==='no'){s-=6;f.push('No keys — key programming can run $200–$600+');}
+  if(document.getElementById('cBags').value==='yes'){s-=12;f.push('Airbags deployed — airbag/SRS repair is costly');}
+  const o=document.getElementById('cOdo').value;if(o==='notactual'){s-=12;f.push('Odometer not actual — hurts resale value');}
+  const mi=num('cMiles');if(mi>150000){s-=8;f.push('High mileage (150k+)');}else if(mi>100000)s-=4;
+  const rc=num('cRecalls');if(rc>0){s-=Math.min(rc*2,8);f.push(rc+' recall(s) on this model — confirm they are fixed');}
+  s=Math.max(0,s);const g=s>=85?'A':s>=70?'B':s>=55?'C':s>=40?'D':'F';
+  return {score:s,grade:g,flags:f};
+}
+function calc(){
+  const value=num('nValue'),repair=num('nRepair'),profit=num('nProfit'),pct=num('nFeePct')/100,flat=num('nFeeFlat'),tow=num('nTow'),dmv=num('nDmv'),tax=+document.getElementById('nTax').value/100;
+  const rk=risk();
+  const riskPad=Math.round(repair*(rk.score<55?0.3:rk.score<70?0.2:0.1));
+  const net=value-profit-repair-riskPad-tow-dmv-flat;
+  const maxBid=Math.max(0,Math.floor(net/(1+pct+tax)/25)*25);
+  const allIn=maxBid+maxBid*pct+flat+maxBid*tax+repair+riskPad+tow+dmv;
+  return {...rk,maxBid,allIn,riskPad,value,profit:value-allIn};
+}
+function money(n){return '$'+Math.round(n).toLocaleString();}
+document.getElementById('calcBtn').addEventListener('click',()=>{
+  if(!num('nValue')){alert('Enter a resale/retail value first.');return;}
+  const c=calc();
+  const verdict=c.grade==='F'?'Pass unless you are a parts buyer':c.maxBid<=0?'Numbers don\u2019t work at any price':c.grade==='D'?'Only at a deep discount':'Worth bidding up to your max';
+  document.getElementById('result').innerHTML=`<div class="kpi" style="margin-top:14px">
+    <div>Risk grade<span class="grade g${c.grade}">${c.grade}</span><span class="muted">${c.score}/100</span></div>
+    <div>Max bid<b>${money(c.maxBid)}</b><span class="muted">stop here</span></div>
+    <div>All-in cost<b>${money(c.allIn)}</b><span class="muted">bid+fees+tax+repair+tow</span></div>
+    <div>Hidden-damage pad<b>${money(c.riskPad)}</b><span class="muted">added to repairs</span></div>
+    <div>Est. profit at max<b>${money(c.profit)}</b></div></div>
+    <p style="margin:12px 0 4px"><b>Verdict:</b> ${verdict}</p>
+    ${c.flags.length?'<ul class="flags muted">'+c.flags.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':''}`;
+});
+
+/* ---------------- WATCHLIST ---------------- */
+document.getElementById('saveBtn').addEventListener('click',()=>{
+  if(!num('nValue')){alert('Calculate a car first.');return;}
+  const c=calc();const lot=prompt('Lot # / auction name (optional)','')||'';
+  const w=store.get('ab_watch',[]);
+  w.unshift({id:Date.now(),vin:document.getElementById('vin').value.toUpperCase(),car:lastVehicle?`${lastVehicle.year} ${lastVehicle.make} ${lastVehicle.model}`:'',lot,grade:c.grade,maxBid:c.maxBid,value:c.value,saved:new Date().toLocaleDateString()});
+  store.set('ab_watch',w);alert('Saved to watchlist');
+});
+function renderWatch(){
+  const w=store.get('ab_watch',[]);const t=document.getElementById('watchTable');
+  if(!w.length){t.innerHTML='<tr><td class="muted">Nothing saved yet — analyze a car and tap “Save to watchlist”.</td></tr>';return;}
+  t.innerHTML='<tr><th>Car</th><th>Lot / auction</th><th>Grade</th><th>Max bid</th><th>Value</th><th>Saved</th><th></th></tr>'+
+    w.map(x=>`<tr><td>${esc(x.car||'—')}<br><span class="muted">${esc(x.vin)}</span></td><td>${esc(x.lot)}</td><td class="g${x.grade}"><b>${x.grade}</b></td><td>${money(x.maxBid)}</td><td>${money(x.value)}</td><td>${esc(x.saved)}</td><td><button class="btn ghost" data-del="${x.id}">✕</button></td></tr>`).join('');
+  t.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{store.set('ab_watch',w.filter(x=>x.id!=b.dataset.del));renderWatch();}));
+}
+document.getElementById('expBtn').addEventListener('click',()=>{
+  const blob=new Blob([JSON.stringify(store.get('ab_watch',[]),null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='autobid-watchlist.json';a.click();
+});
+document.getElementById('impFile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{const d=JSON.parse(rd.result);if(Array.isArray(d)){store.set('ab_watch',d);renderWatch();}}catch(x){alert('Not a valid watchlist file');}};rd.readAsText(f);
+});
+document.getElementById('clrBtn').addEventListener('click',()=>{if(confirm('Delete every saved car?')){store.set('ab_watch',[]);renderWatch();}});
+
+/* ---------------- NYC MARSHAL LOTS ---------------- */
+let NYC=null;const nycByVin={};
+async function loadNYC(){
+  const stamp=document.getElementById('nycStamp');
+  try{
+    const r=await fetch('data/nyc_marshal.json',{cache:'no-cache'});
+    if(!r.ok) throw new Error(r.status);
+    NYC=await r.json();
+  }catch(e){stamp.textContent='Lot data isn’t available yet — it’s created by the daily GitHub Action. Check back after it runs.';return;}
+  NYC.auctions.forEach(a=>a.lots.forEach(l=>{nycByVin[l.vin]={...l,auction:a};}));
+  const upd=new Date(NYC.generatedAt);
+  stamp.textContent=`${NYC.lotCount} cars across ${NYC.auctionCount} upcoming sales · updated ${upd.toLocaleString()}`;
+  const boros=[...new Set(NYC.auctions.map(a=>a.borough))].sort();
+  const nb=document.getElementById('nBoro');boros.forEach(b=>{const o=document.createElement('option');o.textContent=b;nb.appendChild(o);});
+  const nd=document.getElementById('nDate');[...new Set(NYC.auctions.map(a=>a.date).filter(Boolean))].sort().forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=fmtDate(d);nd.appendChild(o);});
+  renderNYC();
+}
+function fmtDate(d){if(!d)return 'Date TBD';const [y,m,dd]=d.split('-');return new Date(+y,m-1,+dd).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});}
+['nBoro','nDate','nMinYear','nText','nNoLien'].forEach(id=>document.getElementById(id).addEventListener('input',()=>renderNYC()));
+function renderNYC(){
+  if(!NYC)return;
+  const b=document.getElementById('nBoro').value,d=document.getElementById('nDate').value,my=+document.getElementById('nMinYear').value||0;
+  const q=document.getElementById('nText').value.toLowerCase(),noLien=document.getElementById('nNoLien').checked;
+  const out=document.getElementById('nycList');out.innerHTML='';let shown=0;
+  NYC.auctions.filter(a=>(!b||a.borough===b)&&(!d||a.date===d)).forEach(a=>{
+    const lots=a.lots.filter(l=>{
+      const dc=l.decoded||{};const yr=+(dc.modelYear||l.year||0);
+      const hay=[l.vin,l.make,dc.make,dc.model,dc.trim].join(' ').toLowerCase();
+      return (!my||yr>=my)&&(!q||hay.includes(q))&&(!noLien||!l.lienholder);
+    });
+    if(!lots.length)return;shown+=lots.length;
+    const card=document.createElement('div');card.className='card';
+    card.innerHTML=`<h3>${esc(fmtDate(a.date))} · ${esc(a.borough||'')} <span class="muted">(${lots.length} cars)</span></h3>
+      <div class="muted">${esc(a.time||'')}${a.location?' · '+esc(a.location):''}</div>
+      <div class="row" style="margin:8px 0"><a class="btn ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${esc(a.pdf)}">Official list (PDF)</a>
+      ${a.location?`<a class="btn ghost" style="text-decoration:none" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(a.location)}">Directions</a>`:''}</div>
+      <div class="scroll"><table><tr><th>#</th><th>Vehicle</th><th>VIN</th><th>Lienholder</th><th>Recalls</th><th></th></tr>
+      ${lots.map(l=>{const dc=l.decoded||{};
+        const name=[dc.modelYear||l.year,dc.make||l.make,dc.model,dc.trim].filter(Boolean).join(' ');
+        return `<tr><td>${l.lot??''}</td><td><b>${esc(name)}</b><br><span class="muted">${esc([dc.body,dc.engine,dc.drive].filter(Boolean).join(' · '))}</span></td>
+        <td style="font-family:monospace;font-size:12px">${esc(l.vin)}</td><td class="muted">${esc(l.lienholder||'—')}</td>
+        <td>${l.recalls==null?'—':l.recalls}</td><td><button class="btn" data-an="${esc(l.vin)}" style="padding:6px 10px">Analyze</button></td></tr>`;}).join('')}
+      </table></div>`;
+    out.appendChild(card);
+  });
+  if(!shown) out.innerHTML='<div class="card muted">No cars match these filters.</div>';
+  out.querySelectorAll('[data-an]').forEach(btn=>btn.addEventListener('click',()=>analyzeVin(btn.dataset.an)));
+}
+function analyzeVin(vin){
+  document.getElementById('vin').value=vin;
+  document.getElementById('cTitle').value='marshal';
+  document.querySelector('#tabs button[data-tab="analyze"]').click();
+  window.scrollTo({top:0,behavior:'smooth'});
+  document.getElementById('vinBtn').click();
+}
+
+/* ---------------- INIT ---------------- */
+setHomeLabel();renderYards();loadNYC();
+</script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+name: Update auction data & deploy site
+
+on:
+  schedule:
+    - cron: "17 10 * * *"   # every day ~6 AM New York time
+  push:
+    branches: [main]
+  workflow_dispatch:         # "Run workflow" button in the Actions tab
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests pypdf
+
+      - name: Fetch NYC Marshal / Sheriff auction lists
+        run: python scripts/fetch_nyc_auctions.py
+        continue-on-error: true   # a nyc.gov outage shouldn't stop the site deploy
+
+      - name: Commit updated data
+        run: |
+          git config user.name "autobid-bot"
+          git config user.email "autobid-bot@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "No data changes"
+          else
+            git commit -m "Update NYC auction data [skip ci]"
+            git push
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
